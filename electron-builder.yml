@@ -1,0 +1,69 @@
+appId: com.store.management
+productName: إدارة المتجر
+copyright: Copyright © 2026
+
+directories:
+  output: dist-app
+  buildResources: build
+
+files:
+  - dist-electron/**/*
+  - "!node_modules"
+
+extraResources:
+  - from: .next/standalone
+    to: server
+    filter:
+      - "**/*"
+  - from: .next/static
+    to: server/.next/static
+    filter:
+      - "**/*"
+  - from: public
+    to: server/public
+    filter:
+      - "**/*"
+  - from: prisma/schema.prisma
+    to: server/prisma/schema.prisma
+  - from: node_modules/.prisma
+    to: server/node_modules/.prisma
+    filter:
+      - "**/*"
+
+mac:
+  category: public.app-category.business
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerLanguages:
+    - ar
+    - en
+  language: ar
+
+linux:
+  target: AppImage
+  category: Office
+
+# GitHub Releases auto-update
+# Set GH_TOKEN env var when building to publish releases
+publish:
+  provider: github
+  owner: seifsamehtolba
+  repo: management-software-build
+  private: true

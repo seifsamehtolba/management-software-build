@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" fill="#f4f4f5"/>
+  <rect x="52" y="52" width="152" height="152" rx="14" fill="#e4e4e7" stroke="#a1a1aa" stroke-width="4"/>
+  <path d="M84 164 L112 128 L132 148 L168 104" fill="none" stroke="#71717a" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="84" cy="164" r="6" fill="#71717a"/>
+  <circle cx="112" cy="128" r="6" fill="#71717a"/>
+  <circle cx="132" cy="148" r="6" fill="#71717a"/>
+  <circle cx="168" cy="104" r="6" fill="#71717a"/>
+  <text x="128" y="230" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#52525b">COMPONENT</text>
+</svg>

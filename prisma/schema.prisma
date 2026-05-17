@@ -1,0 +1,1171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String                @id @default(cuid())
+  name                    String
+  email                   String                @unique
+  passwordHash            String
+  role                    Role                  @default(CASHIER)
+  permissions             Json                  @default("[]")
+  branchId                String?
+  branch                  Branch?               @relation(fields: [branchId], references: [id])
+  isActive                Boolean               @default(true)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  sales                   Sale[]
+  activityLogs            ActivityLog[]
+  repairTickets           RepairTicket[]        @relation("Technician")
+  repairNotes             RepairNote[]
+  expenses                Expense[]
+  stockMovements          StockMovement[]
+  createdQuotes           Quote[]               @relation("QuoteCreatedBy")
+  statusChangedQuotes     Quote[]               @relation("QuoteStatusChangedBy")
+  quoteStatusHistory      QuoteStatusHistory[]
+  elevationCodesCreated   ElevationCode[]       @relation("ElevationCodeCreatedBy")
+  approvalsRequested      ElevationApproval[]   @relation("ElevationApprovalRequester")
+  approvalsResolved       ElevationApproval[]   @relation("ElevationApprovalResolver")
+  refunds                 Refund[]
+  supplierPayments        SupplierPayment[]
+  employeeProfile         EmployeeProfile?
+  compensationChanges     CompensationHistory[] @relation("CompensationChangedBy")
+  attendanceRecorded      AttendanceEntry[]     @relation("AttendanceRecordedBy")
+  leaveApproved           LeaveRequest[]        @relation("LeaveApprovedBy")
+  payrollRunsProcessed    PayrollRun[]          @relation("PayrollRunProcessedBy")
+  cashShifts              CashShift[]
+  cashShiftEntries        CashShiftEntry[]
+  stockTransfersRequested StockTransfer[]       @relation("TransferRequestedBy")
+  stockTransfersShipped   StockTransfer[]       @relation("TransferShippedBy")
+  stockTransfersReceived  StockTransfer[]       @relation("TransferReceivedBy")
+  buildOrders             BuildOrder[]          @relation("BuildTechnician")
+}
+
+model ElevationCode {
+  id           String    @id @default(cuid())
+  codeHash     String
+  createdById  String
+  createdBy    User      @relation("ElevationCodeCreatedBy", fields: [createdById], references: [id])
+  expiresAt    DateTime
+  usedAt       DateTime?
+  consumedById String?
+  createdAt    DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model ElevationApproval {
+  id          String    @id @default(cuid())
+  requesterId String
+  requester   User      @relation("ElevationApprovalRequester", fields: [requesterId], references: [id])
+  summary     String
+  routeHint   String?
+  status      String    @default("PENDING")
+  resolverId  String?
+  resolver    User?     @relation("ElevationApprovalResolver", fields: [resolverId], references: [id])
+  resolvedAt  DateTime?
+  issuedToken String?
+  createdAt   DateTime  @default(now())
+
+  @@index([status])
+  @@index([requesterId])
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  CASHIER
+  WAREHOUSE
+}
+
+model Branch {
+  id                 String               @id @default(cuid())
+  name               String
+  address            String?
+  phone              String?
+  isActive           Boolean              @default(true)
+  users              User[]
+  locations          Location[]
+  quotes             Quote[]
+  purchaseOrders     PurchaseOrder[]
+  costLayers         InventoryCostLayer[]
+  stockTransfersFrom StockTransfer[]      @relation("TransferFromBranch")
+  stockTransfersTo   StockTransfer[]      @relation("TransferToBranch")
+  employeeProfiles   EmployeeProfile[]
+  payrollRuns        PayrollRun[]
+  cashShifts         CashShift[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+}
+
+model Category {
+  id         String      @id @default(cuid())
+  name       String
+  nameAr     String?
+  parentId   String?
+  parent     Category?   @relation("CategoryTree", fields: [parentId], references: [id])
+  children   Category[]  @relation("CategoryTree")
+  products   Product[]
+  promotions Promotion[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Brand {
+  id        String    @id @default(cuid())
+  name      String
+  logoUrl   String?
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id                 String               @id @default(cuid())
+  sku                String               @unique
+  barcode            String?              @unique
+  name               String
+  nameAr             String?
+  description        String?
+  categoryId         String
+  category           Category             @relation(fields: [categoryId], references: [id])
+  brandId            String?
+  brand              Brand?               @relation(fields: [brandId], references: [id])
+  costPrice          Decimal             
+  sellPrice          Decimal             
+  taxRate            Decimal              @default(0.14)
+  isActive           Boolean              @default(true)
+  hasSerials         Boolean              @default(false)
+  isBundleKit        Boolean              @default(false)
+  reorderPoint       Int                  @default(5)
+  imageUrl           String?
+  componentCategory  ComponentCategory?
+  specs              Json?
+  externalRef        String?
+  suggestedPriceUsd  Decimal?            
+  salesRank          Int                  @default(0)
+  variants           ProductVariant[]
+  serials            ProductSerial[]
+  stockLevels        StockLevel[]
+  stockMovements     StockMovement[]
+  saleItems          SaleItem[]
+  poItems            POItem[]
+  repairParts        RepairPart[]
+  costLayers         InventoryCostLayer[]
+  refundItems        RefundItem[]
+  bundleItems        BundleItem[]         @relation("BundleParent")
+  bundleOf           BundleItem[]         @relation("BundleChild")
+  priceLists         PriceListItem[]
+  promotions         Promotion[]
+  quoteItems         QuoteItem[]
+  buildOrderParts    BuildOrderPart[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  stockTransferItems StockTransferItem[]
+}
+
+enum ComponentCategory {
+  CPU
+  GPU
+  RAM
+  STORAGE_SSD
+  STORAGE_HDD
+  MOTHERBOARD
+  PSU
+  CASE
+  COOLER
+  MONITOR
+  KEYBOARD
+  MOUSE
+  CASE_FAN
+  THERMAL_PASTE
+  CABLE
+  OTHER
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  sku       String   @unique
+  barcode   String?  @unique
+  costPrice Decimal 
+  sellPrice Decimal 
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductSerial {
+  id        String       @id @default(cuid())
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  serial    String       @unique
+  status    SerialStatus @default(IN_STOCK)
+  saleId    String?
+  poId      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+enum SerialStatus {
+  IN_STOCK
+  SOLD
+  RETURNED
+  DEFECTIVE
+  IN_REPAIR
+}
+
+model BundleItem {
+  id       String  @id @default(cuid())
+  parentId String
+  parent   Product @relation("BundleParent", fields: [parentId], references: [id], onDelete: Cascade)
+  childId  String
+  child    Product @relation("BundleChild", fields: [childId], references: [id])
+  quantity Int
+
+  @@unique([parentId, childId])
+}
+
+model Location {
+  id                 String               @id @default(cuid())
+  name               String
+  branchId           String?
+  branch             Branch?              @relation(fields: [branchId], references: [id])
+  stockLevels        StockLevel[]
+  stockMovements     StockMovement[]
+  costLayers         InventoryCostLayer[]
+  refundItems        RefundItem[]
+  stockTransfersFrom StockTransfer[]      @relation("TransferFromLocation")
+  stockTransfersTo   StockTransfer[]      @relation("TransferToLocation")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+}
+
+model StockLevel {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+  quantity   Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([productId, locationId])
+}
+
+model StockMovement {
+  id              String                    @id @default(cuid())
+  productId       String
+  product         Product                   @relation(fields: [productId], references: [id])
+  locationId      String
+  location        Location                  @relation(fields: [locationId], references: [id])
+  type            MovementType
+  quantity        Int
+  previousQty     Int
+  newQty          Int
+  reason          String?
+  referenceId     String?
+  userId          String
+  user            User                      @relation(fields: [userId], references: [id])
+  costAllocations InventoryCostAllocation[]
+  createdAt       DateTime                  @default(now())
+}
+
+enum MovementType {
+  SALE
+  RETURN
+  PURCHASE
+  ADJUSTMENT
+  TRANSFER_IN
+  TRANSFER_OUT
+  REPAIR_USE
+  OPENING_STOCK
+}
+
+model Customer {
+  id            String         @id @default(cuid())
+  name          String
+  phone         String         @unique
+  email         String?
+  address       String?
+  nationalId    String?
+  type          CustomerType   @default(REGULAR)
+  creditBalance Decimal        @default(0)
+  loyaltyPoints Int            @default(0)
+  notes         String?
+  isBlacklisted Boolean        @default(false)
+  sales         Sale[]
+  quotes        Quote[]
+  repairTickets RepairTicket[]
+  buildOrders   BuildOrder[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum CustomerType {
+  REGULAR
+  VIP
+  WHOLESALE
+}
+
+model Sale {
+  id                 String            @id @default(cuid())
+  invoiceNumber      String            @unique
+  customerId         String?
+  customer           Customer?         @relation(fields: [customerId], references: [id])
+  cashierId          String
+  cashier            User              @relation(fields: [cashierId], references: [id])
+  items              SaleItem[]
+  payments           Payment[]
+  refunds            Refund[]
+  exchangeRefunds    Refund[]          @relation("ExchangeReplacementSale")
+  subtotal           Decimal          
+  discountAmount     Decimal           @default(0)
+  taxAmount          Decimal          
+  total              Decimal          
+  status             SaleStatus        @default(COMPLETED)
+  couponId           String?
+  coupon             Coupon?           @relation(fields: [couponId], references: [id])
+  notes              String?
+  isEtaSubmitted     Boolean           @default(false)
+  etaUuid            String?
+  convertedFromQuote Quote?            @relation("QuoteConvertedSale")
+  buildOrder         BuildOrder?       @relation("BuildConvertedSale")
+  commissionEntries  CommissionEntry[]
+  cashShiftEntries   CashShiftEntry[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+  LAYAWAY
+  QUOTE
+  LAYAWAY_COMPLETE
+}
+
+model Quote {
+  id                String               @id @default(cuid())
+  quoteNumber       String               @unique
+  status            QuoteStatus          @default(DRAFT)
+  title             String               @default("Price Quote")
+  branchId          String?
+  branch            Branch?              @relation(fields: [branchId], references: [id])
+  customerId        String?
+  customer          Customer?            @relation(fields: [customerId], references: [id])
+  clientName        String?
+  clientPhone       String?
+  notes             String?
+  validUntil        DateTime?
+  sentAt            DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  convertedAt       DateTime?
+  convertedSaleId   String?              @unique
+  convertedSale     Sale?                @relation("QuoteConvertedSale", fields: [convertedSaleId], references: [id])
+  subtotal          Decimal             
+  total             Decimal             
+  createdById       String
+  createdBy         User                 @relation("QuoteCreatedBy", fields: [createdById], references: [id])
+  statusChangedById String?
+  statusChangedBy   User?                @relation("QuoteStatusChangedBy", fields: [statusChangedById], references: [id])
+  statusChangedAt   DateTime?
+  lastReminderAt    DateTime?
+  reminderCount     Int                  @default(0)
+  nextReminderAt    DateTime?
+  items             QuoteItem[]
+  statusHistory     QuoteStatusHistory[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+}
+
+model QuoteItem {
+  id            String   @id @default(cuid())
+  quoteId       String
+  quote         Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  categoryKey   String
+  categoryLabel String
+  description   String
+  quantity      Int      @default(1)
+  unitPrice     Decimal  @default(0)
+  lineTotal     Decimal  @default(0)
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id])
+  position      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model QuoteStatusHistory {
+  id          String       @id @default(cuid())
+  quoteId     String
+  quote       Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  fromStatus  QuoteStatus?
+  toStatus    QuoteStatus
+  reason      String?
+  changedById String
+  changedBy   User         @relation(fields: [changedById], references: [id])
+  changedAt   DateTime     @default(now())
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  APPROVED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+model SaleItem {
+  id               String                    @id @default(cuid())
+  saleId           String
+  sale             Sale                      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product                   @relation(fields: [productId], references: [id])
+  serialId         String?
+  variantId        String?
+  quantity         Int
+  unitPrice        Decimal                  
+  discount         Decimal                   @default(0)
+  taxRate          Decimal                  
+  total            Decimal                  
+  costAllocatedQty Int                       @default(0)
+  refundedQty      Int                       @default(0)
+  realizedUnitCost Decimal?                 
+  realizedCogs     Decimal?                 
+  grossProfit      Decimal?                 
+  costAllocatedAt  DateTime?
+  costAllocations  InventoryCostAllocation[]
+  refundItems      RefundItem[]
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  saleId    String
+  sale      Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  method    PaymentMethod
+  amount    Decimal      
+  reference String?
+  createdAt DateTime      @default(now())
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  INSTALMENT
+  STORE_CREDIT
+  BANK_TRANSFER
+  FAWRY
+  VODAFONE_CASH
+}
+
+model Refund {
+  id                String           @id @default(cuid())
+  saleId            String
+  sale              Sale             @relation(fields: [saleId], references: [id])
+  amount            Decimal         
+  reason            String
+  settlementMethod  PaymentMethod?
+  refundMode        RefundMode       @default(STANDARD)
+  replacementSaleId String?
+  replacementSale   Sale?            @relation("ExchangeReplacementSale", fields: [replacementSaleId], references: [id])
+  exchangeReference String?
+  storeCreditIssued Decimal          @default(0)
+  userId            String
+  user              User             @relation(fields: [userId], references: [id])
+  items             RefundItem[]
+  cashShiftEntries  CashShiftEntry[]
+  createdAt         DateTime         @default(now())
+}
+
+model Supplier {
+  id                 String          @id @default(cuid())
+  name               String
+  contactName        String?
+  phone              String?
+  email              String?
+  address            String?
+  taxNumber          String?
+  paymentTerms       String?
+  outstandingBalance Decimal         @default(0)
+  purchaseOrders     PurchaseOrder[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+}
+
+model PurchaseOrder {
+  id           String            @id @default(cuid())
+  poNumber     String            @unique
+  supplierId   String
+  supplier     Supplier          @relation(fields: [supplierId], references: [id])
+  branchId     String?
+  branch       Branch?           @relation(fields: [branchId], references: [id])
+  items        POItem[]
+  payments     SupplierPayment[]
+  status       POStatus          @default(DRAFT)
+  expectedDate DateTime?
+  dueDate      DateTime?
+  receivedDate DateTime?
+  subtotal     Decimal          
+  taxAmount    Decimal           @default(0)
+  total        Decimal          
+  paidAmount   Decimal           @default(0)
+  notes        String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+enum POStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+model POItem {
+  id          String               @id @default(cuid())
+  poId        String
+  po          PurchaseOrder        @relation(fields: [poId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product              @relation(fields: [productId], references: [id])
+  orderedQty  Int
+  receivedQty Int                  @default(0)
+  unitCost    Decimal             
+  total       Decimal             
+  costLayers  InventoryCostLayer[]
+}
+
+model SupplierPayment {
+  id           String        @id @default(cuid())
+  poId         String
+  po           PurchaseOrder @relation(fields: [poId], references: [id])
+  amount       Decimal      
+  method       PaymentMethod
+  reference    String?
+  note         String?
+  reversedAt   DateTime?
+  reversalNote String?
+  userId       String?
+  user         User?         @relation(fields: [userId], references: [id])
+  paidAt       DateTime      @default(now())
+}
+
+model RefundItem {
+  id              String                    @id @default(cuid())
+  refundId        String
+  refund          Refund                    @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  saleItemId      String?
+  saleItem        SaleItem?                 @relation(fields: [saleItemId], references: [id])
+  productId       String
+  product         Product                   @relation(fields: [productId], references: [id])
+  locationId      String?
+  location        Location?                 @relation(fields: [locationId], references: [id])
+  quantity        Int
+  amount          Decimal                  
+  restocked       Boolean                   @default(false)
+  restockedQty    Int                       @default(0)
+  restockedCost   Decimal                   @default(0)
+  costAllocations InventoryCostAllocation[]
+}
+
+model InventoryCostLayer {
+  id           String                    @id @default(cuid())
+  productId    String
+  product      Product                   @relation(fields: [productId], references: [id])
+  locationId   String
+  location     Location                  @relation(fields: [locationId], references: [id])
+  branchId     String?
+  branch       Branch?                   @relation(fields: [branchId], references: [id])
+  poItemId     String?
+  poItem       POItem?                   @relation(fields: [poItemId], references: [id])
+  sourceType   CostLayerSourceType
+  sourceId     String?
+  unitCost     Decimal                  
+  originalQty  Int
+  remainingQty Int
+  receivedAt   DateTime
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  allocations  InventoryCostAllocation[]
+
+  @@index([productId, locationId, receivedAt])
+  @@index([branchId, receivedAt])
+}
+
+model InventoryCostAllocation {
+  id              String                  @id @default(cuid())
+  layerId         String
+  layer           InventoryCostLayer      @relation(fields: [layerId], references: [id], onDelete: Cascade)
+  saleItemId      String?
+  saleItem        SaleItem?               @relation(fields: [saleItemId], references: [id])
+  refundItemId    String?
+  refundItem      RefundItem?             @relation(fields: [refundItemId], references: [id])
+  stockMovementId String?
+  stockMovement   StockMovement?          @relation(fields: [stockMovementId], references: [id])
+  direction       CostAllocationDirection
+  reason          CostAllocationReason
+  quantity        Int
+  unitCost        Decimal                
+  totalCost       Decimal                
+  createdAt       DateTime                @default(now())
+
+  @@index([saleItemId])
+  @@index([refundItemId])
+  @@index([stockMovementId])
+}
+
+enum CostLayerSourceType {
+  PURCHASE
+  OPENING_STOCK
+  ADJUSTMENT
+  RETURN
+}
+
+enum CostAllocationDirection {
+  IN
+  OUT
+}
+
+enum CostAllocationReason {
+  SALE
+  REFUND_RESTOCK
+  ADJUSTMENT_GAIN
+  ADJUSTMENT_LOSS
+}
+
+enum RefundMode {
+  STANDARD
+  EXCHANGE
+}
+
+model StockTransfer {
+  id             String              @id @default(cuid())
+  transferNumber String              @unique
+  fromBranchId   String
+  fromBranch     Branch              @relation("TransferFromBranch", fields: [fromBranchId], references: [id])
+  toBranchId     String
+  toBranch       Branch              @relation("TransferToBranch", fields: [toBranchId], references: [id])
+  fromLocationId String
+  fromLocation   Location            @relation("TransferFromLocation", fields: [fromLocationId], references: [id])
+  toLocationId   String
+  toLocation     Location            @relation("TransferToLocation", fields: [toLocationId], references: [id])
+  status         StockTransferStatus @default(DRAFT)
+  notes          String?
+  requestedById  String
+  requestedBy    User                @relation("TransferRequestedBy", fields: [requestedById], references: [id])
+  shippedById    String?
+  shippedBy      User?               @relation("TransferShippedBy", fields: [shippedById], references: [id])
+  shippedAt      DateTime?
+  receivedById   String?
+  receivedBy     User?               @relation("TransferReceivedBy", fields: [receivedById], references: [id])
+  receivedAt     DateTime?
+  items          StockTransferItem[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([fromBranchId, status, createdAt])
+  @@index([toBranchId, status, createdAt])
+}
+
+model StockTransferItem {
+  id                String        @id @default(cuid())
+  stockTransferId   String
+  stockTransfer     StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product       @relation(fields: [productId], references: [id])
+  quantity          Int
+  shippedQty        Int           @default(0)
+  receivedQty       Int           @default(0)
+  unitCostSnapshot  Decimal?     
+  totalCostSnapshot Decimal?     
+
+  @@unique([stockTransferId, productId])
+}
+
+enum StockTransferStatus {
+  DRAFT
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+model CashShift {
+  id           String           @id @default(cuid())
+  branchId     String
+  branch       Branch           @relation(fields: [branchId], references: [id])
+  userId       String
+  user         User             @relation(fields: [userId], references: [id])
+  status       CashShiftStatus  @default(OPEN)
+  openedAt     DateTime         @default(now())
+  openingCash  Decimal         
+  closedAt     DateTime?
+  expectedCash Decimal          @default(0)
+  countedCash  Decimal?        
+  variance     Decimal          @default(0)
+  notes        String?
+  entries      CashShiftEntry[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([branchId, status, openedAt])
+  @@index([userId, status, openedAt])
+}
+
+model CashShiftEntry {
+  id        String             @id @default(cuid())
+  shiftId   String
+  shift     CashShift          @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User               @relation(fields: [userId], references: [id])
+  type      CashShiftEntryType
+  amount    Decimal           
+  note      String?
+  saleId    String?
+  sale      Sale?              @relation(fields: [saleId], references: [id])
+  refundId  String?
+  refund    Refund?            @relation(fields: [refundId], references: [id])
+  createdAt DateTime           @default(now())
+
+  @@index([shiftId, createdAt])
+}
+
+enum CashShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashShiftEntryType {
+  OPENING_FLOAT
+  SALE_CASH
+  REFUND_CASH
+  PAYIN
+  PAYOUT
+  CLOSE
+}
+
+model EmployeeProfile {
+  id                  String                @id @default(cuid())
+  userId              String                @unique
+  user                User                  @relation(fields: [userId], references: [id])
+  branchId            String?
+  branch              Branch?               @relation(fields: [branchId], references: [id])
+  employeeCode        String                @unique
+  title               String?
+  department          String?
+  hireDate            DateTime?
+  payFrequency        PayFrequency          @default(MONTHLY)
+  notes               String?
+  isActive            Boolean               @default(true)
+  compensationHistory CompensationHistory[]
+  attendanceEntries   AttendanceEntry[]
+  leaveRequests       LeaveRequest[]
+  commissionRules     CommissionRule[]
+  commissionEntries   CommissionEntry[]
+  payrollItems        PayrollItem[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@index([branchId, isActive])
+}
+
+enum PayFrequency {
+  MONTHLY
+  WEEKLY
+  BIWEEKLY
+}
+
+model CompensationHistory {
+  id                 String          @id @default(cuid())
+  employeeId         String
+  employee           EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  baseSalary         Decimal        
+  allowance          Decimal         @default(0)
+  transportAllowance Decimal         @default(0)
+  effectiveFrom      DateTime
+  notes              String?
+  changedById        String?
+  changedBy          User?           @relation("CompensationChangedBy", fields: [changedById], references: [id])
+  createdAt          DateTime        @default(now())
+
+  @@index([employeeId, effectiveFrom])
+}
+
+model AttendanceEntry {
+  id            String           @id @default(cuid())
+  employeeId    String
+  employee      EmployeeProfile  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date          DateTime
+  status        AttendanceStatus @default(PRESENT)
+  checkIn       DateTime?
+  checkOut      DateTime?
+  workedMinutes Int              @default(0)
+  note          String?
+  recordedById  String?
+  recordedBy    User?            @relation("AttendanceRecordedBy", fields: [recordedById], references: [id])
+  createdAt     DateTime         @default(now())
+
+  @@unique([employeeId, date])
+  @@index([date, status])
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  LEAVE
+}
+
+model LeaveRequest {
+  id           String          @id @default(cuid())
+  employeeId   String
+  employee     EmployeeProfile @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type         LeaveType
+  status       LeaveStatus     @default(PENDING)
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  approvedById String?
+  approvedBy   User?           @relation("LeaveApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+  note         String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([employeeId, status, startDate])
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CommissionRule {
+  id            String             @id @default(cuid())
+  employeeId    String
+  employee      EmployeeProfile    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type          CommissionRuleType
+  rate          Decimal           
+  effectiveFrom DateTime
+  isActive      Boolean            @default(true)
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([employeeId, isActive, effectiveFrom])
+}
+
+enum CommissionRuleType {
+  PERCENT_OF_REVENUE
+  FIXED_PER_SALE
+  MARGIN_SHARE
+}
+
+model PayrollRun {
+  id            String           @id @default(cuid())
+  branchId      String?
+  branch        Branch?          @relation(fields: [branchId], references: [id])
+  periodStart   DateTime
+  periodEnd     DateTime
+  status        PayrollRunStatus @default(DRAFT)
+  notes         String?
+  processedById String?
+  processedBy   User?            @relation("PayrollRunProcessedBy", fields: [processedById], references: [id])
+  paidAt        DateTime?
+  items         PayrollItem[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([branchId, status, periodStart])
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  POSTED
+  PAID
+}
+
+model PayrollItem {
+  id                String                   @id @default(cuid())
+  payrollRunId      String
+  payrollRun        PayrollRun               @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId        String
+  employee          EmployeeProfile          @relation(fields: [employeeId], references: [id])
+  baseSalary        Decimal                 
+  allowances        Decimal                  @default(0)
+  deductions        Decimal                  @default(0)
+  leaveDeduction    Decimal                  @default(0)
+  commissions       Decimal                  @default(0)
+  overtime          Decimal                  @default(0)
+  netPay            Decimal                 
+  paymentStatus     PayrollItemPaymentStatus @default(PENDING)
+  paidAt            DateTime?
+  note              String?
+  commissionEntries CommissionEntry[]
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@unique([payrollRunId, employeeId])
+  @@index([employeeId, paymentStatus])
+}
+
+enum PayrollItemPaymentStatus {
+  PENDING
+  PAID
+  HOLD
+}
+
+model CommissionEntry {
+  id            String                    @id @default(cuid())
+  employeeId    String
+  employee      EmployeeProfile           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  saleId        String?
+  sale          Sale?                     @relation(fields: [saleId], references: [id])
+  payrollItemId String?
+  payrollItem   PayrollItem?              @relation(fields: [payrollItemId], references: [id])
+  amount        Decimal                  
+  basisAmount   Decimal                   @default(0)
+  sourceType    CommissionEntrySourceType @default(SALE)
+  note          String?
+  createdAt     DateTime                  @default(now())
+
+  @@index([employeeId, createdAt])
+}
+
+enum CommissionEntrySourceType {
+  SALE
+  MANUAL
+}
+
+model RepairTicket {
+  id            String       @id @default(cuid())
+  ticketNumber  String       @unique
+  customerId    String
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  technicianId  String?
+  technician    User?        @relation("Technician", fields: [technicianId], references: [id])
+  deviceName    String
+  deviceModel   String?
+  issueDesc     String
+  status        RepairStatus @default(RECEIVED)
+  estimatedCost Decimal?    
+  laborCost     Decimal?    
+  finalCost     Decimal?    
+  parts         RepairPart[]
+  notes         RepairNote[]
+  warrantyUntil DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+enum RepairStatus {
+  RECEIVED
+  DIAGNOSING
+  WAITING_PARTS
+  IN_REPAIR
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model RepairPart {
+  id        String       @id @default(cuid())
+  ticketId  String
+  ticket    RepairTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product      @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitCost  Decimal     
+}
+
+model RepairNote {
+  id        String       @id @default(cuid())
+  ticketId  String
+  ticket    RepairTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  content   String
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  createdAt DateTime     @default(now())
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  categoryId  String
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  amount      Decimal        
+  description String
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  date        DateTime
+  createdAt   DateTime        @default(now())
+}
+
+model ExpenseCategory {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  expenses Expense[]
+}
+
+model PriceList {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  type      CustomerType
+  items     PriceListItem[]
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model PriceListItem {
+  id          String    @id @default(cuid())
+  priceListId String
+  priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price       Decimal  
+
+  @@unique([priceListId, productId])
+}
+
+model Promotion {
+  id         String    @id @default(cuid())
+  name       String
+  type       PromoType
+  value      Decimal  
+  minQty     Int?
+  productId  String?
+  product    Product?  @relation(fields: [productId], references: [id])
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  startsAt   DateTime
+  endsAt     DateTime
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+enum PromoType {
+  PERCENTAGE
+  FIXED
+  BUY_X_GET_Y
+}
+
+model Coupon {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  type      PromoType
+  value     Decimal  
+  maxUses   Int?
+  usedCount Int       @default(0)
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+  sales     Sale[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model BuildOrder {
+  id              String           @id @default(cuid())
+  buildNumber     String           @unique
+  title           String
+  customerId      String
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  technicianId    String?
+  technician      User?            @relation("BuildTechnician", fields: [technicianId], references: [id])
+  status          BuildStatus      @default(PLANNING)
+  estimatedCost   Decimal?        
+  laborCost       Decimal?        
+  finalCost       Decimal?        
+  notes           String?
+  parts           BuildOrderPart[]
+  convertedSaleId String?          @unique
+  convertedSale   Sale?            @relation("BuildConvertedSale", fields: [convertedSaleId], references: [id])
+  deliveredAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([customerId, status])
+  @@index([status, createdAt])
+}
+
+model BuildOrderPart {
+  id           String     @id @default(cuid())
+  buildOrderId String
+  buildOrder   BuildOrder @relation(fields: [buildOrderId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id])
+  quantity     Int
+  unitCost     Decimal   
+  note         String?
+
+  @@unique([buildOrderId, productId])
+}
+
+enum BuildStatus {
+  PLANNING
+  SOURCING
+  ASSEMBLING
+  TESTING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model SyncDevice {
+  id         String   @id @default(cuid())
+  deviceId   String   @unique
+  deviceName String
+  userId     String
+  branchId   String?
+  lastSyncAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model SyncLog {
+  id           String   @id @default(cuid())
+  deviceId     String
+  tableName    String
+  recordId     String
+  operation    String
+  payload      Json
+  status       String
+  conflictNote String?
+  syncedAt     DateTime @default(now())
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  tableName String?
+  recordId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+}

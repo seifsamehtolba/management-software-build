@@ -10,12 +10,12 @@
     "lint": "eslint",
     "test": "vitest",
     "finance:backfill": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/backfillFinanceCosting.ts",
-    "electron:dev": "tsc -p electron/tsconfig.json && electron dist-electron/main.js",
-    "electron:build": "ELECTRON_BUILD=1 next build --webpack && tsc -p electron/tsconfig.json && electron-builder",
-    "electron:build:win": "ELECTRON_BUILD=1 next build --webpack && tsc -p electron/tsconfig.json && electron-builder --win",
-    "electron:build:mac": "ELECTRON_BUILD=1 next build --webpack && tsc -p electron/tsconfig.json && electron-builder --mac",
-    "electron:publish:win": "node scripts/bake-update-token.mjs && ELECTRON_BUILD=1 next build --webpack && tsc -p electron/tsconfig.json && electron-builder --win --publish always",
-    "electron:publish:mac": "node scripts/bake-update-token.mjs && ELECTRON_BUILD=1 next build --webpack && tsc -p electron/tsconfig.json && electron-builder --mac --publish always"
+    "electron:bundle": "node scripts/build-electron.mjs",
+    "electron:dev": "node scripts/build-electron.mjs && electron dist-electron/main.js",
+    "electron:build:win": "ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --win",
+    "electron:build:mac": "ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --mac",
+    "electron:publish:win": "node scripts/bake-update-token.mjs && ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --win --publish always",
+    "electron:publish:mac": "node scripts/bake-update-token.mjs && ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --mac --publish always"
   },
   "dependencies": {
     "@kbco/pcpartpicker": "^0.0.2",
@@ -47,6 +47,7 @@
     "@types/react-dom": "^19",
     "electron": "^36.3.1",
     "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "prisma": "^6.19.3",

@@ -18,6 +18,16 @@ export default function LoginPage() {
   useEffect(() => {
     if (status === "authenticated") {
       router.replace("/");
+      return;
+    }
+    // First-run: if no users exist yet, go to setup wizard
+    if (status === "unauthenticated") {
+      fetch("/api/setup")
+        .then((r) => r.json())
+        .then((d: { needsSetup?: boolean }) => {
+          if (d.needsSetup) router.replace("/setup");
+        })
+        .catch(() => {});
     }
   }, [status, router]);
 

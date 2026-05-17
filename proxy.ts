@@ -35,6 +35,7 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const p = req.nextUrl.pathname;
         if (p === "/login" || p.startsWith("/login/")) return true;
+        if (p === "/setup" || p.startsWith("/setup/")) return true;
         return !!token;
       },
     },

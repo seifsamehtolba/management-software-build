@@ -17,8 +17,8 @@
 /.next/
 /out/
 
-# production
-/build
+# production (Next.js export, not used — Next.js builds to .next/)
+# /build is intentionally NOT ignored — it holds electron-builder assets (icons, entitlements)
 
 # misc
 .DS_Store

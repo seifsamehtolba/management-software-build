@@ -21,33 +21,37 @@ function findFreePort(preferred: number[]): Promise<number> {
   });
 }
 
-// ── Logger (file-based — no process.stdout in packaged app) ──────────────────
+// ── Logger ────────────────────────────────────────────────────────────────────
 
 let logStream: WriteStream | null = null;
+const logBuffer: string[] = [];
 
 function initLogger() {
   const logDir = app.getPath("userData");
   mkdirSync(logDir, { recursive: true });
   const logPath = join(logDir, "app.log");
   logStream = createWriteStream(logPath, { flags: "a" });
+  // Flush anything logged before the file was ready
+  for (const line of logBuffer) logStream.write(line);
+  logBuffer.length = 0;
 }
 
 function log(...args: unknown[]) {
   const line = `[${new Date().toISOString()}] ${args.join(" ")}\n`;
-  logStream?.write(line);
-  // Only write to stdout if it's actually writable (dev mode with terminal)
-  if (process.stdout.writable) {
-    try { process.stdout.write(line); } catch { /* broken pipe in packaged app */ }
+  if (logStream) {
+    logStream.write(line);
+  } else {
+    logBuffer.push(line);
   }
 }
 
-// ── Read-only update token (baked in at build time) ───────────────────────────
+// ── Read-only update token ────────────────────────────────────────────────────
 
 let GH_READ_TOKEN = "";
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   GH_READ_TOKEN = (require("./update-token") as { GH_READ_TOKEN: string }).GH_READ_TOKEN ?? "";
-} catch { /* not present in dev */ }
+} catch { /* not generated in dev */ }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -60,18 +64,14 @@ const isDev = !app.isPackaged;
 // ── Auto-updater ──────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
-  // Lazy-load so electron-log doesn't touch stdout before the app is ready
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
-
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.logger = null;
 
   const readToken = GH_READ_TOKEN || process.env.GH_READ_TOKEN;
-  if (readToken) {
-    autoUpdater.requestHeaders = { Authorization: `token ${readToken}` };
-  }
+  if (readToken) autoUpdater.requestHeaders = { Authorization: `token ${readToken}` };
 
   autoUpdater.on("checking-for-update", () => sendToWindow("update:checking"));
   autoUpdater.on("update-available", (info) =>
@@ -105,7 +105,8 @@ function sendToWindow(channel: string, payload?: unknown) {
 function getDbPath(): string {
   const dataDir = app.getPath("userData");
   mkdirSync(dataDir, { recursive: true });
-  return join(dataDir, "database.db");
+  // Use forward slashes for the SQLite file: URI (works on all platforms)
+  return dataDir.replace(/\\/g, "/");
 }
 
 function getServerRoot(): string {
@@ -117,7 +118,7 @@ async function startNextServer(): Promise<void> {
   serverPort = await findFreePort([3000, 3001, 3002, 3003, 3004, 3005]);
 
   if (isDev) {
-    log(`[electron] Dev mode — expecting Next.js at http://127.0.0.1:3000`);
+    log("[electron] Dev mode — expecting Next.js at http://127.0.0.1:3000");
     serverPort = 3000;
     return;
   }
@@ -125,37 +126,56 @@ async function startNextServer(): Promise<void> {
   const serverRoot = getServerRoot();
   const serverScript = join(serverRoot, "server.js");
 
+  log("[electron] resourcesPath:", process.resourcesPath);
+  log("[electron] serverRoot:", serverRoot);
+  log("[electron] serverScript:", serverScript, "exists:", existsSync(serverScript));
+  log("[electron] dbPath:", getDbPath());
+  log("[electron] port:", serverPort);
+
   if (!existsSync(serverScript)) {
-    throw new Error(`Next.js server not found at ${serverScript}`);
+    throw new Error(
+      `Next.js server not found at:\n${serverScript}\n\nresourcesPath: ${process.resourcesPath}`
+    );
   }
 
+  const dbPath = getDbPath();
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PORT: String(serverPort),
     HOSTNAME: "127.0.0.1",
-    DATABASE_URL: `file:${getDbPath()}`,
+    DATABASE_URL: `file:${dbPath}/database.db`,
     NEXTAUTH_URL: `http://127.0.0.1:${serverPort}`,
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ?? "electron-local-secret-change-me",
     NODE_ENV: "production" as const,
   };
 
-  log(`[electron] Starting Next.js on port ${serverPort}`);
+  log("[electron] spawning server with DATABASE_URL:", env.DATABASE_URL);
+
+  // Collect stderr so we can show it in the error dialog if the server times out
+  const stderrLines: string[] = [];
 
   serverProcess = spawn(process.execPath, [serverScript], {
     env,
     cwd: serverRoot,
-    // Use ignore for stdin; pipe stdout/stderr to our log file
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  // Relay child output to the log file only — never to process.stdout/stderr
-  serverProcess.stdout?.on("data", (d: Buffer) => logStream?.write(d));
-  serverProcess.stderr?.on("data", (d: Buffer) => logStream?.write(d));
+  serverProcess.stdout?.on("data", (d: Buffer) => log("[server]", d.toString().trim()));
+  serverProcess.stderr?.on("data", (d: Buffer) => {
+    const text = d.toString().trim();
+    log("[server:err]", text);
+    stderrLines.push(text);
+  });
   serverProcess.on("error", (e) => log("[server] spawn error:", e.message));
-  serverProcess.on("exit", (code) => log("[server] exited with code", code));
+  serverProcess.on("exit", (code, signal) => log("[server] exited — code:", code, "signal:", signal));
 
-  await waitForServer(`http://127.0.0.1:${serverPort}/api/setup`, 40_000);
-  log(`[electron] Server ready`);
+  try {
+    await waitForServer(`http://127.0.0.1:${serverPort}/api/setup`, 60_000);
+    log("[electron] Server ready");
+  } catch {
+    const details = stderrLines.slice(-20).join("\n") || "(no output captured)";
+    throw new Error(`Server did not start.\n\nLast output:\n${details}\n\nLog: ${app.getPath("userData")}\\app.log`);
+  }
 }
 
 function waitForServer(url: string, timeoutMs: number): Promise<void> {
@@ -166,9 +186,9 @@ function waitForServer(url: string, timeoutMs: number): Promise<void> {
         .then(() => resolve())
         .catch(() => {
           if (Date.now() > deadline) {
-            reject(new Error(`Server did not start in time (${url})`));
+            reject(new Error("timeout"));
           } else {
-            setTimeout(check, 600);
+            setTimeout(check, 800);
           }
         });
     };
@@ -206,8 +226,8 @@ function createWindow() {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  try { initLogger(); } catch { /* ignore logger failures */ }
-  log(`[electron] Starting — version ${app.getVersion()}, packaged=${app.isPackaged}`);
+  try { initLogger(); } catch { /* ignore — logBuffer will catch early logs */ }
+  log(`[electron] App ready — version ${app.getVersion()}, packaged=${app.isPackaged}, platform=${process.platform}`);
 
   try {
     await startNextServer();
@@ -215,7 +235,7 @@ app.whenReady().then(async () => {
     setupAutoUpdater();
   } catch (err) {
     const msg = String(err);
-    log("[electron] Fatal error:", msg);
+    log("[electron] Fatal:", msg);
     dialog.showErrorBox("خطأ في بدء التشغيل", msg);
     app.quit();
   }

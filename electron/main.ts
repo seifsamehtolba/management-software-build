@@ -1,9 +1,11 @@
 import { app, BrowserWindow, shell, ipcMain } from "electron";
 import { join, resolve } from "path";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, createWriteStream, WriteStream } from "fs";
 import { spawn, ChildProcess } from "child_process";
 import { createServer } from "net";
 import { autoUpdater } from "electron-updater";
+
+// ── Port finder ───────────────────────────────────────────────────────────────
 
 function findFreePort(preferred: number[]): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -11,20 +13,42 @@ function findFreePort(preferred: number[]): Promise<number> {
       if (ports.length === 0) { reject(new Error("No free port found")); return; }
       const [port, ...rest] = ports;
       const srv = createServer();
-      srv.listen(port, "127.0.0.1", () => {
-        srv.close(() => resolve(port));
-      });
+      srv.listen(port, "127.0.0.1", () => { srv.close(() => resolve(port)); });
       srv.on("error", () => tryPort(rest));
     };
     tryPort(preferred);
   });
 }
-// Generated at build time by scripts/bake-update-token.mjs — gitignored
+
+// ── Logger (file-based — no process.stdout in packaged app) ──────────────────
+
+let logStream: WriteStream | null = null;
+
+function initLogger() {
+  const logDir = app.getPath("userData");
+  mkdirSync(logDir, { recursive: true });
+  const logPath = join(logDir, "app.log");
+  logStream = createWriteStream(logPath, { flags: "a" });
+}
+
+function log(...args: unknown[]) {
+  const line = `[${new Date().toISOString()}] ${args.join(" ")}\n`;
+  logStream?.write(line);
+  // Only write to stdout if it's actually writable (dev mode with terminal)
+  if (process.stdout.writable) {
+    try { process.stdout.write(line); } catch { /* broken pipe in packaged app */ }
+  }
+}
+
+// ── Read-only update token (baked in at build time) ───────────────────────────
+
 let GH_READ_TOKEN = "";
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   GH_READ_TOKEN = (require("./update-token") as { GH_READ_TOKEN: string }).GH_READ_TOKEN ?? "";
 } catch { /* not present in dev */ }
+
+// ── State ─────────────────────────────────────────────────────────────────────
 
 let win: BrowserWindow | null = null;
 let serverProcess: ChildProcess | null = null;
@@ -32,59 +56,37 @@ let serverPort = 3000;
 
 const isDev = !app.isPackaged;
 
-// ── Auto-updater setup ───────────────────────────────────────────────────────
+// ── Auto-updater ──────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = null; // use our own logger
 
-  // Required for private GitHub repos: read-only token baked in at build time
   const readToken = GH_READ_TOKEN || process.env.GH_READ_TOKEN;
   if (readToken) {
     autoUpdater.requestHeaders = { Authorization: `token ${readToken}` };
   }
 
-  autoUpdater.on("checking-for-update", () => {
-    sendToWindow("update:checking");
-  });
-
-  autoUpdater.on("update-available", (info) => {
-    sendToWindow("update:available", {
-      version: info.version,
-      releaseNotes: info.releaseNotes ?? null,
-    });
-  });
-
-  autoUpdater.on("update-not-available", () => {
-    sendToWindow("update:not-available");
-  });
-
-  autoUpdater.on("download-progress", (progress) => {
-    sendToWindow("update:progress", {
-      percent: Math.round(progress.percent),
-      transferred: progress.transferred,
-      total: progress.total,
-    });
-  });
-
-  autoUpdater.on("update-downloaded", (info) => {
-    sendToWindow("update:downloaded", { version: info.version });
-  });
-
+  autoUpdater.on("checking-for-update", () => sendToWindow("update:checking"));
+  autoUpdater.on("update-available", (info) =>
+    sendToWindow("update:available", { version: info.version, releaseNotes: info.releaseNotes ?? null }));
+  autoUpdater.on("update-not-available", () => sendToWindow("update:not-available"));
+  autoUpdater.on("download-progress", (p) =>
+    sendToWindow("update:progress", { percent: Math.round(p.percent), transferred: p.transferred, total: p.total }));
+  autoUpdater.on("update-downloaded", (info) =>
+    sendToWindow("update:downloaded", { version: info.version }));
   autoUpdater.on("error", (err) => {
+    log("[updater] error:", err.message);
     sendToWindow("update:error", { message: err.message });
   });
 
-  // IPC: renderer asks to install now
-  ipcMain.on("update:install-now", () => {
-    autoUpdater.quitAndInstall(false, true);
-  });
+  ipcMain.on("update:install-now", () => autoUpdater.quitAndInstall(false, true));
 
-  // Check immediately, then every 4 hours
   if (!isDev) {
-    autoUpdater.checkForUpdates().catch(console.error);
+    autoUpdater.checkForUpdates().catch((e) => log("[updater] check failed:", e.message));
     setInterval(() => {
-      autoUpdater.checkForUpdates().catch(console.error);
+      autoUpdater.checkForUpdates().catch((e) => log("[updater] check failed:", e.message));
     }, 4 * 60 * 60 * 1000);
   }
 }
@@ -93,7 +95,7 @@ function sendToWindow(channel: string, payload?: unknown) {
   win?.webContents?.send(channel, payload);
 }
 
-// ── Next.js server ───────────────────────────────────────────────────────────
+// ── Next.js server ────────────────────────────────────────────────────────────
 
 function getDbPath(): string {
   const dataDir = app.getPath("userData");
@@ -109,10 +111,16 @@ function getServerRoot(): string {
 async function startNextServer(): Promise<void> {
   serverPort = await findFreePort([3000, 3001, 3002, 3003, 3004, 3005]);
 
+  if (isDev) {
+    log(`[electron] Dev mode — expecting Next.js at http://127.0.0.1:3000`);
+    serverPort = 3000;
+    return;
+  }
+
   const serverRoot = getServerRoot();
   const serverScript = join(serverRoot, "server.js");
 
-  if (!existsSync(serverScript) && !isDev) {
+  if (!existsSync(serverScript)) {
     throw new Error(`Next.js server not found at ${serverScript}`);
   }
 
@@ -126,22 +134,23 @@ async function startNextServer(): Promise<void> {
     NODE_ENV: "production" as const,
   };
 
-  if (isDev) {
-    console.log(`[electron] Dev mode — expecting Next.js at http://127.0.0.1:${serverPort}`);
-    serverPort = 3000;
-    return;
-  }
+  log(`[electron] Starting Next.js on port ${serverPort}`);
 
   serverProcess = spawn(process.execPath, [serverScript], {
     env,
     cwd: serverRoot,
-    stdio: "pipe",
+    // Use ignore for stdin; pipe stdout/stderr to our log file
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
-  serverProcess!.stdout?.on("data", (d: Buffer) => process.stdout.write(d));
-  serverProcess!.stderr?.on("data", (d: Buffer) => process.stderr.write(d));
+  // Relay child output to the log file only — never to process.stdout/stderr
+  serverProcess.stdout?.on("data", (d: Buffer) => logStream?.write(d));
+  serverProcess.stderr?.on("data", (d: Buffer) => logStream?.write(d));
+  serverProcess.on("error", (e) => log("[server] spawn error:", e.message));
+  serverProcess.on("exit", (code) => log("[server] exited with code", code));
 
-  await waitForServer(`http://127.0.0.1:${serverPort}/api/setup`, 30_000);
+  await waitForServer(`http://127.0.0.1:${serverPort}/api/setup`, 40_000);
+  log(`[electron] Server ready`);
 }
 
 function waitForServer(url: string, timeoutMs: number): Promise<void> {
@@ -154,7 +163,7 @@ function waitForServer(url: string, timeoutMs: number): Promise<void> {
           if (Date.now() > deadline) {
             reject(new Error(`Server did not start in time (${url})`));
           } else {
-            setTimeout(check, 500);
+            setTimeout(check, 600);
           }
         });
     };
@@ -162,7 +171,7 @@ function waitForServer(url: string, timeoutMs: number): Promise<void> {
   });
 }
 
-// ── Window ───────────────────────────────────────────────────────────────────
+// ── Window ────────────────────────────────────────────────────────────────────
 
 function createWindow() {
   win = new BrowserWindow({
@@ -192,12 +201,15 @@ function createWindow() {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  initLogger();
+  log(`[electron] Starting — version ${app.getVersion()}, packaged=${app.isPackaged}`);
+
   try {
     await startNextServer();
     createWindow();
     setupAutoUpdater();
   } catch (err) {
-    console.error("[electron] Failed to start:", err);
+    log("[electron] Fatal error:", String(err));
     app.quit();
   }
 
@@ -212,4 +224,5 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   serverProcess?.kill();
+  logStream?.end();
 });

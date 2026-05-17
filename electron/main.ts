@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from "electron";
+import { app, BrowserWindow, shell, ipcMain, dialog } from "electron";
 import { join, resolve } from "path";
 import { existsSync, mkdirSync, createWriteStream, WriteStream } from "fs";
 import { spawn, ChildProcess } from "child_process";
@@ -201,7 +201,7 @@ function createWindow() {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  initLogger();
+  try { initLogger(); } catch { /* ignore logger failures */ }
   log(`[electron] Starting — version ${app.getVersion()}, packaged=${app.isPackaged}`);
 
   try {
@@ -209,7 +209,9 @@ app.whenReady().then(async () => {
     createWindow();
     setupAutoUpdater();
   } catch (err) {
-    log("[electron] Fatal error:", String(err));
+    const msg = String(err);
+    log("[electron] Fatal error:", msg);
+    dialog.showErrorBox("خطأ في بدء التشغيل", msg);
     app.quit();
   }
 

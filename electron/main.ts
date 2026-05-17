@@ -3,7 +3,8 @@ import { join, resolve } from "path";
 import { existsSync, mkdirSync, createWriteStream, WriteStream } from "fs";
 import { spawn, ChildProcess } from "child_process";
 import { createServer } from "net";
-import { autoUpdater } from "electron-updater";
+// electron-updater is lazy-loaded inside setupAutoUpdater() to prevent
+// its internal electron-log from writing to stdout at import time (causes EPIPE).
 
 // ── Port finder ───────────────────────────────────────────────────────────────
 
@@ -59,9 +60,13 @@ const isDev = !app.isPackaged;
 // ── Auto-updater ──────────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
+  // Lazy-load so electron-log doesn't touch stdout before the app is ready
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
+
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.logger = null; // use our own logger
+  autoUpdater.logger = null;
 
   const readToken = GH_READ_TOKEN || process.env.GH_READ_TOKEN;
   if (readToken) {
@@ -84,9 +89,9 @@ function setupAutoUpdater() {
   ipcMain.on("update:install-now", () => autoUpdater.quitAndInstall(false, true));
 
   if (!isDev) {
-    autoUpdater.checkForUpdates().catch((e) => log("[updater] check failed:", e.message));
+    autoUpdater.checkForUpdates().catch((e: Error) => log("[updater] check failed:", e.message));
     setInterval(() => {
-      autoUpdater.checkForUpdates().catch((e) => log("[updater] check failed:", e.message));
+      autoUpdater.checkForUpdates().catch((e: Error) => log("[updater] check failed:", e.message));
     }, 4 * 60 * 60 * 1000);
   }
 }

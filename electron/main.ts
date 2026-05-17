@@ -2,8 +2,23 @@ import { app, BrowserWindow, shell, ipcMain } from "electron";
 import { join, resolve } from "path";
 import { existsSync, mkdirSync } from "fs";
 import { spawn, ChildProcess } from "child_process";
-import getPort from "get-port";
+import { createServer } from "net";
 import { autoUpdater } from "electron-updater";
+
+function findFreePort(preferred: number[]): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const tryPort = (ports: number[]) => {
+      if (ports.length === 0) { reject(new Error("No free port found")); return; }
+      const [port, ...rest] = ports;
+      const srv = createServer();
+      srv.listen(port, "127.0.0.1", () => {
+        srv.close(() => resolve(port));
+      });
+      srv.on("error", () => tryPort(rest));
+    };
+    tryPort(preferred);
+  });
+}
 // Generated at build time by scripts/bake-update-token.mjs — gitignored
 let GH_READ_TOKEN = "";
 try {
@@ -92,7 +107,7 @@ function getServerRoot(): string {
 }
 
 async function startNextServer(): Promise<void> {
-  serverPort = await getPort({ port: [3000, 3001, 3002, 3003, 3004, 3005] });
+  serverPort = await findFreePort([3000, 3001, 3002, 3003, 3004, 3005]);
 
   const serverRoot = getServerRoot();
   const serverScript = join(serverRoot, "server.js");

@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "@kbco/pcpartpicker": "^0.0.2",
+    "@neondatabase/serverless": "^1.1.0",
+    "@prisma/adapter-neon": "^7.8.0",
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-dialog": "^1.1.15",
     "axios": "^1.15.2",

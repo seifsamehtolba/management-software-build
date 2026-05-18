@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import { neon } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
 
 const globalForPrisma = globalThis as unknown as {
@@ -7,12 +6,17 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const sql = neon(process.env.DATABASE_URL!);
-  const adapter = new PrismaNeon(sql);
-  return new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set");
+  }
+  const dev = process.env.NODE_ENV === "development";
+  // Neon requires its HTTP adapter; local/standard PostgreSQL uses the built-in driver
+  if (connectionString.includes("neon.tech")) {
+    const adapter = new PrismaNeon({ connectionString });
+    return new PrismaClient({ adapter, log: dev ? ["error", "warn"] : ["error"] });
+  }
+  return new PrismaClient({ log: dev ? ["error", "warn"] : ["error"] });
 }
 
 /**

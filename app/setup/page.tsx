@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Store, User, Lock, Phone, ChevronRight, CheckCircle, Loader2 } from "lucide-react";
+import { Store, User, Lock, Phone, ChevronRight, CheckCircle, Loader2, ImagePlus, X } from "lucide-react";
 
 type Step = 1 | 2 | 3;
 
@@ -17,6 +17,23 @@ export default function SetupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Step 2: Logo
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      setError("حجم الصورة يجب أن يكون أقل من 3 ميغابايت");
+      return;
+    }
+    setError("");
+    const reader = new FileReader();
+    reader.onload = (ev) => setLogoDataUrl(ev.target?.result as string ?? null);
+    reader.readAsDataURL(file);
+  };
 
   // Step 2: Store info
   const [storeName, setStoreName] = useState("");
@@ -45,7 +62,7 @@ export default function SetupPage() {
       const res = await fetch("/api/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, storeName, storePhone }),
+        body: JSON.stringify({ name, email, password, storeName, storePhone, storeLogo: logoDataUrl ?? undefined }),
       });
       if (res.ok) {
         setStep(3);
@@ -237,6 +254,60 @@ export default function SetupPage() {
                 className="app-input w-full"
                 autoFocus
               />
+            </div>
+
+            {/* Logo upload */}
+            <div>
+              <label className="mb-1.5 block text-sm font-bold" style={{ color: "var(--foreground, #0f172a)" }}>
+                <ImagePlus size={14} className="inline me-1.5 opacity-60" aria-hidden />
+                شعار المتجر (اختياري)
+              </label>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleLogoChange}
+              />
+              {logoDataUrl ? (
+                <div className="relative flex items-center gap-4 rounded-2xl border p-3" style={{ borderColor: "var(--border, #e2e8f0)" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={logoDataUrl} alt="شعار المتجر" className="h-16 w-16 rounded-xl object-contain" style={{ background: "#f8fafc" }} />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold" style={{ color: "var(--foreground, #0f172a)" }}>تم رفع الشعار</p>
+                    <button
+                      type="button"
+                      onClick={() => logoInputRef.current?.click()}
+                      className="mt-0.5 text-xs underline"
+                      style={{ color: "var(--accent, #60a5fa)" }}
+                    >
+                      تغيير الصورة
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setLogoDataUrl(null); if (logoInputRef.current) logoInputRef.current.value = ""; }}
+                    className="flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-red-50"
+                    style={{ color: "var(--muted, #94a3b8)" }}
+                    aria-label="حذف الشعار"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  className="flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed py-6 transition-colors hover:border-blue-300 hover:bg-blue-50/40"
+                  style={{ borderColor: "var(--border, #e2e8f0)" }}
+                >
+                  <ImagePlus size={28} strokeWidth={1.5} style={{ color: "var(--muted, #94a3b8)" }} aria-hidden />
+                  <span className="text-sm font-medium" style={{ color: "var(--muted, #64748b)" }}>
+                    انقر لرفع شعار المتجر
+                  </span>
+                  <span className="text-xs" style={{ color: "var(--muted, #94a3b8)" }}>PNG أو JPG — حتى 3 ميغابايت</span>
+                </button>
+              )}
             </div>
 
             <div>

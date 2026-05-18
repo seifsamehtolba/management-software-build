@@ -1,0 +1,45 @@
+{
+  "name": "نظام إدارة المتجر",
+  "short_name": "إدارة المتجر",
+  "description": "نظام إدارة متجر الحاسوب والمعدات — نقطة بيع وإدارة متكاملة",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#60a5fa",
+  "lang": "ar",
+  "dir": "rtl",
+  "scope": "/",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "نقطة البيع",
+      "short_name": "POS",
+      "description": "افتح نقطة البيع مباشرة",
+      "url": "/pos",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "المنتجات",
+      "short_name": "منتجات",
+      "description": "إدارة المنتجات والمخزون",
+      "url": "/products",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

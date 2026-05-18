@@ -15,7 +15,12 @@
     "electron:build:win": "ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --win",
     "electron:build:mac": "ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --mac",
     "electron:publish:win": "node scripts/bake-update-token.mjs && ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --win --publish always",
-    "electron:publish:mac": "node scripts/bake-update-token.mjs && ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --mac --publish always"
+    "electron:publish:mac": "node scripts/bake-update-token.mjs && ELECTRON_BUILD=1 next build --webpack && node scripts/build-electron.mjs && electron-builder --mac --publish always",
+    "server:build": "next build --webpack",
+    "server:package:mac": "node scripts/package-server.mjs --mac",
+    "server:package:win": "node scripts/package-server.mjs --win",
+    "server:build:mac": "next build --webpack && node scripts/package-server.mjs --mac",
+    "server:build:win": "next build --webpack && node scripts/package-server.mjs --win"
   },
   "dependencies": {
     "@kbco/pcpartpicker": "^0.0.2",

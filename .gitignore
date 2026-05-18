@@ -55,3 +55,15 @@ next-env.d.ts
 /prisma/*.db-journal
 /prisma/*.db-wal
 /prisma/*.db-shm
+
+# browser-based server distribution
+/dist-server-mac/
+/dist-server-win/
+/dist-server-mac.zip
+/dist-server-win.zip
+/.cache-node-win-*.zip
+
+# internal planning / agent files
+/agent-memory.md
+/plan.md
+/data/

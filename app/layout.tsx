@@ -19,6 +19,16 @@ const cairo = Cairo({
 export const metadata: Metadata = {
   title: "نظام إدارة المتجر",
   description: "نظام إدارة متجر الحاسوب والمعدات — نقطة بيع وإدارة متكاملة",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "إدارة المتجر",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "msapplication-TileColor": "#0f172a",
+  },
 };
 
 export default function RootLayout({

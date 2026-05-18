@@ -23,9 +23,10 @@ export async function POST(req: NextRequest) {
     password?: string;
     storeName?: string;
     storePhone?: string;
+    storeLogo?: string;
   };
 
-  const { name, email, password, storeName, storePhone } = body;
+  const { name, email, password, storeName, storePhone, storeLogo } = body;
 
   if (!name?.trim() || !email?.trim() || !password || password.length < 6) {
     return NextResponse.json(
@@ -62,6 +63,13 @@ export async function POST(req: NextRequest) {
       where: { key: "storePhone" },
       update: { value: storePhone.trim() },
       create: { key: "storePhone", value: storePhone.trim() },
+    });
+  }
+  if (storeLogo && storeLogo.startsWith("data:image/")) {
+    await prisma.setting.upsert({
+      where: { key: "storeLogo" },
+      update: { value: storeLogo },
+      create: { key: "storeLogo", value: storeLogo },
     });
   }
 
